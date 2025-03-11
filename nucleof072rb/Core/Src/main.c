@@ -19,8 +19,11 @@
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "main.h"
+#include "spi.h"
+#include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+#include <string.h>
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -38,7 +41,14 @@
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
+#define BUFFER_SIZE 3
+#define START_BIT 0x1
+#define SGL_DIFF 0x80 //SGL, not differential, so we set that bit high
+#define DATA_BITS 0x0
 
+#define MAX_ADC_VAL 1023
+#define PWM_BASE_VAL 3200
+#define PWM_SCALE 3200
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
@@ -65,7 +75,8 @@ void SystemClock_Config(void);
 int main(void)
 {
   /* USER CODE BEGIN 1 */
-
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET); //Init CS pin as high
+	HAL_TIM_PWM_START(&htim1, TIM_CHANNEL_1); //Init timer
   /* USER CODE END 1 */
 
   /* MCU Configuration--------------------------------------------------------*/
@@ -74,7 +85,12 @@ int main(void)
   HAL_Init();
 
   /* USER CODE BEGIN Init */
+  //Buffers to store incoming/receiving data
+  uint8_t txBuffer[BUFFER_SIZE] = { START_BIT, SGL_DIFF, DATA_BITS };
+  uint8_t rxBuffer[BUFFER_SIZE];
 
+  uint16_t adcVal;
+  uint16_t numOnCounts;
   /* USER CODE END Init */
 
   /* Configure the system clock */
@@ -87,6 +103,8 @@ int main(void)
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
   MX_USART2_UART_Init();
+  MX_SPI1_Init();
+  MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
   /* USER CODE END 2 */
@@ -95,9 +113,26 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  //Clear old values, bring CS pin low to initiate communication
+	  memset(rxBuffer, 0, sizeof(rxBuffer));
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_RESET);
+
+	  //SPI communication
+	  HAL_SPI_TransmitReceive(&hspi1, txBuffer, rxBuffer, BUFFER_SIZE, HAL_MAX_DELAY);
+
+	  //Bring CS pin high to signal a stop
+	  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_8, GPIO_PIN_SET);
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+
+	  adc_val = rxBuffer[1] & 0x03 << 8; //Extract bottom 2 bits, these are B9 and B8
+	  adc_val |= rxBuffer[2]; //Put B7-B0 into position
+
+	  numOnCounts = (adc_val/MAX_ADC_VAL)*PWM_SCALE + PWM_BASE_VAL;
+	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, numOnCounts);
+
+	  HAL_Delay(10);
   }
   /* USER CODE END 3 */
 }
