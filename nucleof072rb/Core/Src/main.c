@@ -129,7 +129,7 @@ int main(void)
 	  adc_val = rxBuffer[1] & 0x03 << 8; //Extract bottom 2 bits, these are B9 and B8
 	  adc_val |= rxBuffer[2]; //Put B7-B0 into position
 
-	  numOnCounts = (adc_val/MAX_ADC_VAL)*PWM_SCALE + PWM_BASE_VAL;
+	  numOnCounts = ((float)adc_val/(float)MAX_ADC_VAL)*PWM_SCALE + PWM_BASE_VAL;
 	  __HAL_TIM_SET_COMPARE(&htim1, TIM_CHANNEL_1, numOnCounts);
 
 	  HAL_Delay(10);
